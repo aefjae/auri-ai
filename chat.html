@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -465,6 +466,93 @@ body {
   font-size: 13px;
   font-weight: 700;
 }
+
+/* Markdown inside AI bubbles */
+.ai-bubble p { margin-bottom: 8px; }
+.ai-bubble p:last-child { margin-bottom: 0; }
+.ai-bubble ul, .ai-bubble ol { margin: 8px 0 8px 20px; }
+.ai-bubble li { margin-bottom: 4px; }
+.ai-bubble strong { color: var(--text); font-weight: 800; }
+.ai-bubble em { font-style: italic; }
+.ai-bubble h1, .ai-bubble h2, .ai-bubble h3 { font-weight: 800; margin: 12px 0 6px; color: var(--text); }
+.ai-bubble h1 { font-size: 18px; }
+.ai-bubble h2 { font-size: 16px; }
+.ai-bubble h3 { font-size: 14px; }
+.ai-bubble code {
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 13px;
+  background: rgba(255,255,255,0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--char-color);
+}
+.ai-bubble pre {
+  background: #080810;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+.ai-bubble pre code {
+  background: none;
+  padding: 0;
+  color: #A8D0FF;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
+}
+.ai-bubble blockquote {
+  border-left: 3px solid var(--char-color);
+  padding-left: 12px;
+  color: #8080B0;
+  margin: 8px 0;
+}
+.ai-bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.ai-bubble a { color: var(--char-color); }
+.ai-bubble table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+.ai-bubble th, .ai-bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+.ai-bubble th { background: rgba(255,255,255,0.05); font-weight: 800; }
+
+/* Copy button on AI messages */
+.msg-wrapper { position: relative; }
+.copy-btn {
+  position: absolute;
+  top: 0; right: -36px;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: #6060AA;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s;
+  font-family: inherit;
+}
+.ai-row:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: var(--char-color); }
+
+/* Code block copy button */
+.code-wrap { position: relative; }
+.code-copy-btn {
+  position: absolute;
+  top: 8px; right: 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  color: #7070A0;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.code-copy-btn:hover { background: rgba(255,255,255,0.15); color: var(--text); }
 </style>
 </head>
 <body>
@@ -818,6 +906,29 @@ input.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
 })
 
+function renderMarkdown(text) {
+  try { return marked.parse(text) } catch { return escHtml(text).replace(/\n/g, '<br/>') }
+}
+
+function addCodeCopyButtons(bubble) {
+  bubble.querySelectorAll('pre').forEach(pre => {
+    if (pre.parentElement?.classList.contains('code-wrap')) return
+    const wrap = document.createElement('div')
+    wrap.className = 'code-wrap'
+    pre.parentNode.insertBefore(wrap, pre)
+    wrap.appendChild(pre)
+    const btn = document.createElement('button')
+    btn.className = 'code-copy-btn'
+    btn.textContent = 'Copy'
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(pre.querySelector('code')?.textContent || pre.textContent)
+      btn.textContent = 'Copied!'
+      setTimeout(() => btn.textContent = 'Copy', 2000)
+    })
+    wrap.appendChild(btn)
+  })
+}
+
 function addMessage(role, text) {
   const row = document.createElement('div')
   row.className = `msg-row ${role === 'user' ? 'user-row' : 'ai-row'}`
@@ -828,10 +939,68 @@ function addMessage(role, text) {
   if (role === 'user') {
     row.innerHTML = `<div><div class="msg-time" style="text-align:right">You · ${now}</div><div class="bubble user-bubble">${escHtml(text)}</div></div>`
   } else {
-    row.innerHTML = `<div class="msg-avatar">${charInitial}</div><div><div class="msg-time">${charName} · ${now}</div><div class="bubble ai-bubble">${escHtml(text).replace(/\n/g,'<br/>')}</div></div>`
+    const avatar = document.createElement('div')
+    avatar.className = 'msg-avatar'
+    avatar.textContent = charInitial
+
+    const bubble = document.createElement('div')
+    bubble.className = 'bubble ai-bubble'
+    bubble.innerHTML = renderMarkdown(text)
+
+    const copyBtn = document.createElement('button')
+    copyBtn.className = 'copy-btn'
+    copyBtn.title = 'Copy'
+    copyBtn.textContent = '⎘'
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(text)
+      copyBtn.textContent = '✓'
+      setTimeout(() => copyBtn.textContent = '⎘', 2000)
+    })
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'msg-wrapper'
+    const timeEl = document.createElement('div')
+    timeEl.className = 'msg-time'
+    timeEl.textContent = `${charName} · ${now}`
+    wrapper.appendChild(timeEl)
+    wrapper.appendChild(bubble)
+    wrapper.appendChild(copyBtn)
+
+    row.appendChild(avatar)
+    row.appendChild(wrapper)
+    addCodeCopyButtons(bubble)
   }
   messages.appendChild(row)
   messages.scrollTop = messages.scrollHeight
+}
+
+function createStreamingBubble() {
+  const row = document.createElement('div')
+  row.className = 'msg-row ai-row'
+  const charInitial = currentProfile ? (CHAR_DATA[currentProfile.character]?.name[0] ?? '?') : '?'
+  const charName = currentProfile ? (CHAR_DATA[currentProfile.character]?.name ?? '') : ''
+  const now = new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
+
+  const avatar = document.createElement('div')
+  avatar.className = 'msg-avatar'
+  avatar.textContent = charInitial
+
+  const bubble = document.createElement('div')
+  bubble.className = 'bubble ai-bubble'
+
+  const wrapper = document.createElement('div')
+  wrapper.className = 'msg-wrapper'
+  const timeEl = document.createElement('div')
+  timeEl.className = 'msg-time'
+  timeEl.textContent = `${charName} · ${now}`
+  wrapper.appendChild(timeEl)
+  wrapper.appendChild(bubble)
+
+  row.appendChild(avatar)
+  row.appendChild(wrapper)
+  messages.appendChild(row)
+  messages.scrollTop = messages.scrollHeight
+  return { row, bubble, wrapper }
 }
 
 function addTypingIndicator() {
@@ -862,8 +1031,6 @@ async function sendMessage(text) {
 
   addMessage('user', msg)
   chatHistory.push({ role: 'user', content: msg })
-
-  // Save user message to Supabase (fire-and-forget)
   sb.from('messages').insert({ user_id: currentSession.user.id, role: 'user', content: msg })
 
   setState('thinking')
@@ -880,24 +1047,60 @@ async function sendMessage(text) {
     })
 
     if (!res.ok) throw new Error(`Error ${res.status}`)
-    const data = await res.json()
-    const answer = data.content || 'Something went wrong. Try again.'
 
     removeTypingIndicator()
     setState('talking')
-    addMessage('assistant', answer)
-    chatHistory.push({ role: 'assistant', content: answer })
 
-    // Save AI response to Supabase (fire-and-forget)
-    sb.from('messages').insert({ user_id: currentSession.user.id, role: 'assistant', content: answer })
+    const { bubble, wrapper } = createStreamingBubble()
+    let fullText = ''
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let sseBuffer = ''
 
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      sseBuffer += decoder.decode(value, { stream: true })
+      const lines = sseBuffer.split('\n')
+      sseBuffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const raw = line.slice(6).trim()
+        if (raw === '[DONE]') continue
+        try {
+          const ev = JSON.parse(raw)
+          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            fullText += ev.delta.text
+            bubble.innerHTML = renderMarkdown(fullText)
+            messages.scrollTop = messages.scrollHeight
+          }
+        } catch {}
+      }
+    }
+
+    // Add copy button and code copy buttons after streaming
+    const copyBtn = document.createElement('button')
+    copyBtn.className = 'copy-btn'
+    copyBtn.title = 'Copy'
+    copyBtn.textContent = '⎘'
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(fullText)
+      copyBtn.textContent = '✓'
+      setTimeout(() => copyBtn.textContent = '⎘', 2000)
+    })
+    wrapper.appendChild(copyBtn)
+    addCodeCopyButtons(bubble)
+
+    chatHistory.push({ role: 'assistant', content: fullText })
+    sb.from('messages').insert({ user_id: currentSession.user.id, role: 'assistant', content: fullText })
     setTimeout(() => setState('idle'), 2500)
 
   } catch (err) {
     removeTypingIndicator()
     setState('idle')
     addMessage('assistant', 'Connection issue. Check your network and try again.')
-    chatHistory.pop() // remove failed user message so it can be retried
+    chatHistory.pop()
   }
 
   sendBtn.disabled = false

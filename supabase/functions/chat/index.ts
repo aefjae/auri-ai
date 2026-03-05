@@ -129,6 +129,7 @@ Deno.serve(async (req: Request) => {
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
+      stream: true,
       system: SYSTEM_PROMPTS[character],
       messages: cleanMessages,
     }),
@@ -143,10 +144,11 @@ Deno.serve(async (req: Request) => {
     })
   }
 
-  const claudeData = await anthropicRes.json()
-  const content: string = claudeData.content?.[0]?.text ?? 'Something went wrong. Please try again.'
-
-  return new Response(JSON.stringify({ content }), {
-    headers: { ...CORS, 'Content-Type': 'application/json' },
+  return new Response(anthropicRes.body, {
+    headers: {
+      ...CORS,
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+    },
   })
 })
