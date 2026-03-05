@@ -3,439 +3,666 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Auri — Chat</title>
-<link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@400;500;700;800;900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"/>
+<title>Auri — Chat with Nox</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --dark: #0E0E12;
-  --surface: #16161C;
-  --surface2: #1E1E26;
-  --border: rgba(255,255,255,0.08);
-  --text: #F0F0F5;
-  --muted: #7A7A8C;
-  --accent: #4CAF82;
-  --accent-dim: rgba(76,175,130,0.12);
+  --char-color: #5BA8FF;
+  --char-glow: rgba(91,168,255,0.25);
+  --char-bg: rgba(91,168,255,0.06);
+  --dark: #0A0A12;
+  --surface: #12121C;
+  --surface2: #1A1A28;
+  --border: rgba(255,255,255,0.07);
+  --text: #F0F0F8;
+  --muted: #6060888;
 }
 
-html, body {
-  height: 100%;
-  font-family: 'Cabinet Grotesk', sans-serif;
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: 'Nunito', sans-serif;
   background: var(--dark);
   color: var(--text);
-  overflow: hidden;
+  cursor: none;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Layout: flex column, full height */
-body { display: flex; flex-direction: column; }
+/* Custom cursor */
+.cursor { width: 10px; height: 10px; background: var(--char-color); border-radius: 50%; position: fixed; pointer-events: none; z-index: 9999; transform: translate(-50%,-50%); transition: transform 0.15s, opacity 0.2s; }
+.cursor-ring { width: 30px; height: 30px; border: 1.5px solid rgba(91,168,255,0.4); border-radius: 50%; position: fixed; pointer-events: none; z-index: 9998; transform: translate(-50%,-50%); transition: width 0.2s, height 0.2s; }
 
-/* ── Top bar ── */
-#top-bar {
-  flex-shrink: 0;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
+/* Top bar */
+.topbar {
+  height: 52px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  flex-shrink: 0;
   z-index: 10;
 }
 
-.char-info {
+.topbar-logo { font-size: 18px; font-weight: 900; color: white; }
+.topbar-logo span { color: var(--char-color); }
+
+.topbar-char {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  padding: 4px 12px;
+  background: var(--char-bg);
+  border: 1px solid rgba(91,168,255,0.2);
+  border-radius: 100px;
+}
+.topbar-char-dot { width: 7px; height: 7px; background: var(--char-color); border-radius: 50%; animation: pulse 2s infinite; }
+.topbar-char-name { font-size: 13px; font-weight: 800; color: var(--char-color); }
+.topbar-char-type { font-size: 11px; font-weight: 600; color: #6060AA; }
+
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.5;transform:scale(0.8);} }
+
+.topbar-status {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6060AA;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-dot { width: 6px; height: 6px; background: #4ECB82; border-radius: 50%; animation: pulse 2s infinite; }
+
+/* Main layout */
+.main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 
-.char-avatar-mini {
-  width: 40px; height: 40px;
-  border-radius: 12px;
+/* ── Character Panel ── */
+.char-panel {
+  width: 380px;
+  flex-shrink: 0;
+  background: linear-gradient(160deg, #0D0D18 0%, #0A0A14 100%);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 32px 24px;
+}
+
+/* Background glow behind character */
+.char-glow-bg {
+  position: absolute;
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, var(--char-glow) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -60%);
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+
+/* Grid pattern */
+.char-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(91,168,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91,168,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* Character SVG container */
+.char-figure {
+  position: relative;
+  z-index: 2;
+  animation: idleBreath 4s ease-in-out infinite;
+  transition: filter 0.4s;
+  margin-bottom: 20px;
+}
+
+.char-figure.talking {
+  filter: drop-shadow(0 0 24px var(--char-color));
+  animation: talkBounce 0.5s ease-in-out infinite;
+}
+
+.char-figure.thinking {
+  animation: thinkTilt 2s ease-in-out infinite;
+}
+
+@keyframes idleBreath {
+  0%,100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8px) scale(1.01); }
+}
+
+@keyframes talkBounce {
+  0%,100% { transform: translateY(0) scale(1.02); }
+  50% { transform: translateY(-4px) scale(1.04); }
+}
+
+@keyframes thinkTilt {
+  0%,100% { transform: rotate(0deg) translateY(-4px); }
+  30% { transform: rotate(-3deg) translateY(-6px); }
+  60% { transform: rotate(2deg) translateY(-4px); }
+}
+
+/* Character info below */
+.char-info {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+
+.char-info-name {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--char-color);
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+
+.char-info-type {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5050880;
+  margin-bottom: 20px;
+  opacity: 0.6;
+}
+
+/* State badge */
+.char-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(91,168,255,0.1);
+  border: 1px solid rgba(91,168,255,0.2);
+  color: var(--char-color);
+  transition: all 0.3s;
+  min-width: 110px;
+  justify-content: center;
+}
+.char-state.thinking-state {
+  background: rgba(255,184,48,0.1);
+  border-color: rgba(255,184,48,0.2);
+  color: #FFB830;
+}
+.char-state.talking-state {
+  background: rgba(78,203,130,0.1);
+  border-color: rgba(78,203,130,0.2);
+  color: #4ECB82;
+}
+
+.state-icon { font-size: 14px; }
+
+/* Traits below */
+.char-traits-mini {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 16px;
+}
+.trait-mini {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: #6868A0;
+}
+
+/* Integrate row */
+.integrations-mini {
+  position: absolute;
+  bottom: 24px;
+  left: 0; right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  font-weight: 900;
-  color: #fff;
-  flex-shrink: 0;
+  gap: 10px;
+  padding: 0 24px;
 }
-
-.char-name-label {
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-}
-
-.char-type-label {
+.int-chip {
   font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 100px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: #5858888;
+  cursor: none;
+  transition: all 0.2s;
 }
+.int-chip:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.int-chip.connected { border-color: rgba(78,203,130,0.3); color: #4ECB82; background: rgba(78,203,130,0.06); }
 
-.header-actions {
+/* ── Chat Panel ── */
+.chat-panel {
+  flex: 1;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--dark);
 }
 
-.header-btn {
-  background: none;
-  border: none;
-  font-family: inherit;
-  font-size: 13px;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: color 0.2s, background 0.2s;
-  text-decoration: none;
-  display: inline-block;
-}
-.header-btn:hover { color: var(--text); background: var(--surface2); }
-
-/* ── Messages area ── */
-#messages {
+/* Messages */
+.messages {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 0;
-  scroll-behavior: smooth;
-}
-
-#messages-inner {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 0 24px;
+  padding: 32px 32px 16px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
 }
+
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-track { background: transparent; }
+.messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
 
 /* Message rows */
-.message { display: flex; gap: 10px; max-width: 100%; }
+.msg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  animation: msgIn 0.35s cubic-bezier(0.23,1,0.32,1) both;
+}
+.msg-row.user-row { justify-content: flex-end; }
 
-.message-user {
-  flex-direction: row-reverse;
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.message-avatar {
-  width: 32px; height: 32px;
-  border-radius: 10px;
+/* Bubble */
+.bubble {
+  max-width: 72%;
+  padding: 13px 18px;
+  border-radius: 20px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.6;
+  position: relative;
+}
+
+.ai-bubble {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 6px;
+}
+
+.user-bubble {
+  background: var(--char-color);
+  color: #000;
+  font-weight: 700;
+  border-bottom-right-radius: 6px;
+}
+
+/* Tiny avatar for AI messages */
+.msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--char-bg);
+  border: 1px solid rgba(91,168,255,0.25);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  font-weight: 800;
   flex-shrink: 0;
-  margin-top: 2px;
+  font-weight: 900;
+  color: var(--char-color);
 }
 
-.message-assistant .message-avatar {
-  background: var(--accent-dim);
-  color: var(--accent);
-  border: 1px solid var(--accent);
+/* Timestamp */
+.msg-time {
+  font-size: 10px;
+  font-weight: 700;
+  color: #404070;
+  margin-bottom: 4px;
+  padding: 0 4px;
 }
-
-.message-user .message-avatar {
-  background: var(--surface2);
-  color: var(--muted);
-  border: 1px solid var(--border);
-}
-
-.bubble {
-  max-width: 70%;
-  padding: 12px 16px;
-  border-radius: 18px;
-  font-size: 15px;
-  line-height: 1.65;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.message-assistant .bubble {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px 18px 18px 18px;
-  color: var(--text);
-}
-
-.message-user .bubble {
-  background: var(--accent-dim);
-  border: 1px solid var(--accent);
-  border-radius: 18px 4px 18px 18px;
-  color: var(--text);
-}
+.user-row .msg-time { text-align: right; }
 
 /* Typing indicator */
-#typing {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 0 24px;
-  display: none;
-}
-#typing.visible { display: flex; }
-
 .typing-bubble {
-  background: var(--surface);
+  background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 4px 18px 18px 18px;
   padding: 14px 18px;
+  border-radius: 20px;
+  border-bottom-left-radius: 6px;
   display: flex;
   gap: 5px;
   align-items: center;
-  margin-left: 42px;
-  margin-bottom: 8px;
 }
-
-.typing-bubble span {
+.typing-dot {
   width: 7px; height: 7px;
+  background: #5050A0;
   border-radius: 50%;
-  background: var(--accent);
-  animation: typing-dot 1.2s ease-in-out infinite;
+  animation: typingBounce 1.2s ease-in-out infinite;
 }
-.typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
-.typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes typing-dot {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-  30% { transform: translateY(-6px); opacity: 1; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%,60%,100% { transform: translateY(0); background: #5050A0; }
+  30% { transform: translateY(-7px); background: var(--char-color); }
 }
 
-/* Empty state */
-#empty-state {
-  text-align: center;
-  padding: 48px 24px;
-  color: var(--muted);
+/* Use case chips */
+.usecases {
+  padding: 0 32px 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
-#empty-state .empty-avatar {
-  width: 72px; height: 72px;
-  border-radius: 20px;
-  background: var(--accent-dim);
-  border: 1px solid var(--accent);
+
+.usecase-chip {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  font-weight: 900;
-  color: var(--accent);
-  margin: 0 auto 20px;
-}
-#empty-state h3 {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--text);
-  margin-bottom: 8px;
-  letter-spacing: -0.3px;
-}
-#empty-state p { font-size: 14px; line-height: 1.6; max-width: 300px; margin: 0 auto; }
-
-/* ── Input area ── */
-#input-area {
-  flex-shrink: 0;
-  padding: 16px 24px 20px;
+  gap: 6px;
+  padding: 8px 14px;
   background: var(--surface);
-  border-top: 1px solid var(--border);
-}
-
-.input-wrapper {
-  max-width: 720px;
-  margin: 0 auto;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 10px 10px 10px 16px;
-  transition: border-color 0.2s;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7070A8;
+  cursor: none;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
-.input-wrapper:focus-within { border-color: rgba(255,255,255,0.2); }
+.usecase-chip:hover {
+  background: var(--surface2);
+  border-color: rgba(91,168,255,0.3);
+  color: var(--char-color);
+  transform: translateY(-2px);
+}
 
-#msg-input {
+/* Input area */
+.input-area {
+  padding: 16px 32px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  background: var(--dark);
+}
+
+.input-wrap {
+  flex: 1;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  padding: 4px 4px 4px 20px;
+  gap: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-wrap:focus-within {
+  border-color: rgba(91,168,255,0.4);
+  box-shadow: 0 0 0 4px rgba(91,168,255,0.06);
+}
+
+.chat-input {
   flex: 1;
   background: none;
   border: none;
   outline: none;
   color: var(--text);
-  font-family: inherit;
+  font-family: 'Nunito', sans-serif;
   font-size: 15px;
+  font-weight: 600;
+  padding: 10px 0;
   resize: none;
-  line-height: 1.5;
   max-height: 120px;
-  overflow-y: auto;
+  line-height: 1.5;
 }
-#msg-input::placeholder { color: var(--muted); }
+.chat-input::placeholder { color: #404070; }
 
-#send-btn {
-  width: 38px; height: 38px;
-  border-radius: 10px;
-  background: var(--accent);
+.send-btn {
+  width: 40px; height: 40px;
+  border-radius: 14px;
+  background: var(--char-color);
   border: none;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  cursor: none;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
-#send-btn:hover { filter: brightness(1.15); }
-#send-btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+.send-btn:hover { transform: scale(1.08); box-shadow: 0 4px 16px rgba(91,168,255,0.4); }
+.send-btn:disabled { opacity: 0.3; transform: none; }
+.send-btn svg { width: 18px; height: 18px; fill: #000; }
 
-.input-hint {
+/* Welcome message special styling */
+.welcome-msg {
   text-align: center;
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 8px;
-  max-width: 720px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Scrollbar */
-#messages::-webkit-scrollbar { width: 4px; }
-#messages::-webkit-scrollbar-track { background: transparent; }
-#messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-/* Error toast */
-#error-toast {
-  position: fixed;
-  bottom: 100px; left: 50%; transform: translateX(-50%);
-  background: rgba(255,77,77,0.15);
-  border: 1px solid rgba(255,77,77,0.3);
-  color: #FF4D4D;
-  padding: 10px 20px;
-  border-radius: 10px;
+  padding: 24px;
+  color: #404070;
   font-size: 13px;
-  font-weight: 600;
-  display: none;
-  z-index: 100;
-}
-
-/* Responsive */
-@media (max-width: 600px) {
-  #top-bar { padding: 0 16px; }
-  #input-area { padding: 12px 16px 16px; }
-  .bubble { max-width: 88%; }
+  font-weight: 700;
 }
 </style>
 </head>
 <body>
 
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
 <!-- Top bar -->
-<header id="top-bar">
-  <div class="char-info">
-    <div class="char-avatar-mini" id="char-avatar-mini">?</div>
-    <div>
-      <div class="char-name-label" id="char-name-label">Loading...</div>
-      <div class="char-type-label" id="char-type-label"></div>
-    </div>
+<div class="topbar">
+  <div class="topbar-logo">Auri<span>.</span></div>
+  <div class="topbar-char">
+    <div class="topbar-char-dot"></div>
+    <span class="topbar-char-name">Nox</span>
+    <span class="topbar-char-type">· Analytical</span>
   </div>
-  <div class="header-actions">
-    <a href="character-select.html" class="header-btn">Change companion</a>
-    <button class="header-btn" id="signout-btn">Sign out</button>
+  <div class="topbar-status">
+    <div class="status-dot"></div>
+    Online
   </div>
-</header>
-
-<!-- Messages -->
-<div id="messages">
-  <div id="messages-inner">
-    <div id="empty-state">
-      <div class="empty-avatar" id="empty-avatar">?</div>
-      <h3 id="empty-title">Your companion is ready</h3>
-      <p id="empty-sub">Say something to get started. Your conversation is saved and your companion remembers everything.</p>
-    </div>
-  </div>
-  <div id="typing">
-    <div class="typing-bubble">
-      <span></span><span></span><span></span>
-    </div>
-  </div>
+  <a href="character-select.html" style="font-size:12px;font-weight:700;color:#6060AA;text-decoration:none;margin-left:16px;transition:color 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#6060AA'">Change</a>
+  <button id="signout-btn" style="font-size:12px;font-weight:700;color:#6060AA;background:none;border:none;cursor:pointer;font-family:inherit;margin-left:12px;transition:color 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#6060AA'">Sign out</button>
 </div>
 
-<!-- Input -->
-<div id="input-area">
-  <div class="input-wrapper">
-    <textarea id="msg-input" placeholder="Say something..." rows="1"></textarea>
-    <button id="send-btn" title="Send (Enter)">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+<!-- Main -->
+<div class="main">
+
+  <!-- Character panel -->
+  <div class="char-panel" id="charPanel">
+    <div class="char-glow-bg" id="charGlow"></div>
+
+    <div class="char-figure" id="charFigure">
+      <svg id="charSvg" width="220" height="280" viewBox="0 0 120 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Body/shoulders -->
+        <path d="M12 150 Q12 108 34 104 L60 99 L86 104 Q108 108 108 150Z" fill="#050A14"/>
+        <path d="M34 104 L60 114 L86 104" stroke="#5BA8FF" stroke-width="2" fill="none" opacity="0.5"/>
+        <!-- Collar -->
+        <rect x="54" y="104" width="12" height="10" fill="#050A14"/>
+        <!-- Neck -->
+        <rect x="50" y="81" width="20" height="24" rx="5" fill="#C8D8F0"/>
+        <!-- Head -->
+        <ellipse cx="60" cy="57" rx="33" ry="38" fill="#C8D8F0"/>
+        <!-- Glasses frame -->
+        <rect x="34" y="49" width="20" height="16" rx="5" fill="none" stroke="#5BA8FF" stroke-width="2"/>
+        <rect x="66" y="49" width="20" height="16" rx="5" fill="none" stroke="#5BA8FF" stroke-width="2"/>
+        <line x1="54" y1="57" x2="66" y2="57" stroke="#5BA8FF" stroke-width="2"/>
+        <line x1="26" y1="55" x2="34" y2="55" stroke="#5BA8FF" stroke-width="2"/>
+        <line x1="86" y1="55" x2="94" y2="55" stroke="#5BA8FF" stroke-width="2"/>
+
+        <!-- Eyes — will be controlled by JS -->
+        <g id="eyeLeft">
+          <ellipse cx="44" cy="57" rx="6.5" ry="7" fill="#0A1530"/>
+          <circle id="pupilLeft" cx="44" cy="57" r="3" fill="#1A3A6A"/>
+          <circle id="highlightLeft" cx="45.5" cy="55.5" r="1.5" fill="white"/>
+        </g>
+        <g id="eyeRight">
+          <ellipse cx="76" cy="57" rx="6.5" ry="7" fill="#0A1530"/>
+          <circle id="pupilRight" cx="76" cy="57" r="3" fill="#1A3A6A"/>
+          <circle id="highlightRight" cx="77.5" cy="55.5" r="1.5" fill="white"/>
+        </g>
+
+        <!-- Eyebrows — change expression -->
+        <g id="browGroup">
+          <line id="browLeft"  x1="38" y1="45" x2="52" y2="45" stroke="#1A2A40" stroke-width="2.5" stroke-linecap="round"/>
+          <line id="browRight" x1="68" y1="45" x2="82" y2="45" stroke="#1A2A40" stroke-width="2.5" stroke-linecap="round"/>
+        </g>
+
+        <!-- Mouth — changes state -->
+        <g id="mouthGroup">
+          <path id="mouth" d="M52 74 Q60 79 68 74" stroke="#90A8C0" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </g>
+
+        <!-- Hair -->
+        <path d="M27 55 Q27 21 60 18 Q93 21 93 55 Q89 27 60 25 Q31 27 27 55Z" fill="#1A2A40"/>
+        <!-- Side part -->
+        <path d="M46 19 Q44 25 46 31" stroke="#0A1830" stroke-width="2.5" stroke-linecap="round" fill="none"/>
       </svg>
-    </button>
-  </div>
-  <div class="input-hint">Enter to send · Shift+Enter for new line</div>
-</div>
+    </div>
 
-<div id="error-toast"></div>
+    <div class="char-info">
+      <div class="char-info-name">Nox</div>
+      <div class="char-info-type">Blue · Analytical</div>
+      <div class="char-state" id="charState">
+        <span class="state-icon">👁</span>
+        <span id="stateText">Watching</span>
+      </div>
+      <div class="char-traits-mini">
+        <span class="trait-mini">Precise</span>
+        <span class="trait-mini">Logical</span>
+        <span class="trait-mini">Thoughtful</span>
+      </div>
+    </div>
+
+    <div class="integrations-mini">
+      <div class="int-chip connected">🎵 Spotify</div>
+      <div class="int-chip">📝 Notion</div>
+      <div class="int-chip">📅 Calendar</div>
+    </div>
+  </div>
+
+  <!-- Chat panel -->
+  <div class="chat-panel">
+    <div class="messages" id="messages">
+      <div class="welcome-msg">Today · Just now</div>
+
+      <!-- Initial AI message -->
+      <div class="msg-row ai-row" id="welcomeMsg">
+        <div class="msg-avatar">N</div>
+        <div>
+          <div class="msg-time">Nox</div>
+          <div class="bubble ai-bubble">
+            Hello. I'm Nox — your analytical companion. I process information precisely and prefer directness over pleasantries.<br/><br/>
+            What would you like to work on today?
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use case chips -->
+    <div class="usecases" id="usecases">
+      <div class="usecase-chip" onclick="sendUsecase('Play Blackpink on Spotify')">🎵 Play Blackpink</div>
+      <div class="usecase-chip" onclick="sendUsecase('What\'s on my calendar today?')">📅 Check calendar</div>
+      <div class="usecase-chip" onclick="sendUsecase('Add a note to Notion: ship landing page today')">📝 Add Notion note</div>
+      <div class="usecase-chip" onclick="sendUsecase('Explain quantum computing simply')">🧠 Explain something</div>
+      <div class="usecase-chip" onclick="sendUsecase('Help me debug my thinking on this problem')">⚡ Think together</div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea
+          class="chat-input"
+          id="chatInput"
+          placeholder="Talk to Nox..."
+          rows="1"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
-// ── Config ───────────────────────────────────────────────────────────────────
-const SUPABASE_URL = window.SUPABASE_URL
-const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY
+// ── Supabase ─────────────────────────────────────────────────────────────────
 const { createClient } = window.supabase
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+const sb = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY)
 
-// ── Character data ───────────────────────────────────────────────────────────
-const CHARS = {
-  raze: { name: 'Raze', type: 'Red · Dominant',     accent: '#FF4D4D', accentDim: 'rgba(255,77,77,0.12)',    greeting: "I'm Raze. Let's get into it — what are we working on?" },
-  suni: { name: 'Suni', type: 'Yellow · Influencer', accent: '#FFB830', accentDim: 'rgba(255,184,48,0.12)',  greeting: "Suni here!! I'm SO excited to chat with you!! What's on your mind? 🌟" },
-  vela: { name: 'Vela', type: 'Green · Steady',      accent: '#4CAF82', accentDim: 'rgba(76,175,130,0.12)', greeting: "Hey, I'm Vela. I'm here whenever you're ready to talk. What's going on?" },
-  nox:  { name: 'Nox',  type: 'Blue · Analytical',   accent: '#4D9EFF', accentDim: 'rgba(77,158,255,0.12)', greeting: "Nox online. What would you like to work through today?" }
-}
-
-// ── State ────────────────────────────────────────────────────────────────────
 let currentSession = null
 let currentProfile = null
-let messageHistory = []   // sent to the API
-let isSending = false
+let chatHistory = []
+let firstMessage = true
 
-// ── Init ─────────────────────────────────────────────────────────────────────
+// ── Character data ────────────────────────────────────────────────────────────
+const CHAR_DATA = {
+  raze: { name: 'Raze', type: 'Red · Dominant',     color: '#FF5C5C', glow: 'rgba(255,92,92,0.25)',    bg: 'rgba(255,92,92,0.06)',    traits: ['Bold','Direct','Driven'] },
+  suni: { name: 'Suni', type: 'Yellow · Influencer', color: '#FFB830', glow: 'rgba(255,184,48,0.25)',   bg: 'rgba(255,184,48,0.06)',   traits: ['Energetic','Warm','Creative'] },
+  vela: { name: 'Vela', type: 'Green · Steady',      color: '#4ECB82', glow: 'rgba(78,203,130,0.25)',   bg: 'rgba(78,203,130,0.06)',   traits: ['Calm','Listener','Kind'] },
+  nox:  { name: 'Nox',  type: 'Blue · Analytical',   color: '#5BA8FF', glow: 'rgba(91,168,255,0.25)',   bg: 'rgba(91,168,255,0.06)',   traits: ['Precise','Logical','Thoughtful'] }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   const { data: { session } } = await sb.auth.getSession()
   if (!session) { window.location.href = 'index.html'; return }
   currentSession = session
 
-  const { data: profile } = await sb
-    .from('profiles')
-    .select('character')
-    .eq('id', session.user.id)
-    .single()
-
+  const { data: profile } = await sb.from('profiles').select('character').eq('id', session.user.id).single()
   if (!profile?.character) { window.location.href = 'character-select.html'; return }
   currentProfile = profile
 
-  applyTheme(profile.character)
-  await loadHistory(profile.character)
+  applyCharacterTheme(profile.character)
+  await loadHistory()
+  setState('idle')
 }
 
-// ── Theme ────────────────────────────────────────────────────────────────────
-function applyTheme(char) {
-  const c = CHARS[char]
+function applyCharacterTheme(char) {
+  const c = CHAR_DATA[char] || CHAR_DATA.nox
   const root = document.documentElement
-  root.style.setProperty('--accent', c.accent)
-  root.style.setProperty('--accent-dim', c.accentDim)
+  root.style.setProperty('--char-color', c.color)
+  root.style.setProperty('--char-glow', c.glow)
+  root.style.setProperty('--char-bg', c.bg)
 
-  document.getElementById('char-avatar-mini').textContent = c.name[0]
-  document.getElementById('char-avatar-mini').style.background = c.accentDim
-  document.getElementById('char-avatar-mini').style.color = c.accent
-  document.getElementById('char-avatar-mini').style.border = `1px solid ${c.accent}`
-  document.getElementById('char-name-label').textContent = c.name
-  document.getElementById('char-type-label').textContent = c.type
-  document.getElementById('empty-avatar').textContent = c.name[0]
-  document.getElementById('empty-avatar').style.background = c.accentDim
-  document.getElementById('empty-avatar').style.color = c.accent
-  document.getElementById('empty-avatar').style.border = `1px solid ${c.accent}`
-  document.getElementById('empty-title').textContent = `${c.name} is ready`
+  document.querySelector('.topbar-char-name').textContent = c.name
+  document.querySelector('.topbar-char-type').textContent = '· ' + c.type.split('·')[1]?.trim()
+  document.querySelector('.char-info-name').textContent = c.name
+  document.querySelector('.char-info-type').textContent = c.type
+  document.querySelector('.char-traits-mini').innerHTML = c.traits.map(t => `<span class="trait-mini">${t}</span>`).join('')
+  document.getElementById('chatInput').placeholder = `Talk to ${c.name}...`
+  document.getElementById('welcomeMsg').querySelector('.msg-avatar').textContent = c.name[0]
+  document.getElementById('welcomeMsg').querySelector('.msg-time').textContent = c.name
   document.title = `Auri — ${c.name}`
+
+  // Update glow bg gradient with character color
+  document.getElementById('charGlow').style.background = `radial-gradient(circle, ${c.glow} 0%, transparent 70%)`
 }
 
-// ── Load history from Supabase ────────────────────────────────────────────────
-async function loadHistory(char) {
+async function loadHistory() {
   const { data: msgs } = await sb
     .from('messages')
     .select('role, content')
@@ -444,166 +671,242 @@ async function loadHistory(char) {
     .limit(40)
 
   if (msgs && msgs.length > 0) {
-    // Hide empty state
-    document.getElementById('empty-state').style.display = 'none'
-    messageHistory = msgs.map(m => ({ role: m.role, content: m.content }))
-    msgs.forEach(m => renderMessage(m.role, m.content))
-    scrollToBottom()
-  } else {
-    // Show greeting from the AI (not saved — just a visual welcome)
-    document.getElementById('empty-sub').textContent = CHARS[char].greeting
+    document.getElementById('welcomeMsg').remove()
+    chatHistory = msgs.map(m => ({ role: m.role, content: m.content }))
+    msgs.forEach(m => addMessage(m.role, m.content))
+    messages.scrollTop = messages.scrollHeight
+    firstMessage = false
   }
 }
 
-// ── Render a message bubble ───────────────────────────────────────────────────
-function renderMessage(role, content) {
-  const inner = document.getElementById('messages-inner')
-  const emptyState = document.getElementById('empty-state')
-  if (emptyState) emptyState.remove()
-
-  const row = document.createElement('div')
-  row.className = `message message-${role}`
-
-  const avatar = document.createElement('div')
-  avatar.className = 'message-avatar'
-
-  if (role === 'assistant') {
-    const char = currentProfile.character
-    const c = CHARS[char]
-    avatar.textContent = c.name[0]
-    avatar.style.background = c.accentDim
-    avatar.style.color = c.accent
-    avatar.style.border = `1px solid ${c.accent}`
-  } else {
-    avatar.textContent = 'U'
-  }
-
-  const bubble = document.createElement('div')
-  bubble.className = 'bubble'
-  bubble.textContent = content
-
-  row.appendChild(avatar)
-  row.appendChild(bubble)
-  inner.appendChild(row)
-}
-
-function scrollToBottom() {
-  const el = document.getElementById('messages')
-  el.scrollTop = el.scrollHeight
-}
-
-// ── Send message ──────────────────────────────────────────────────────────────
-async function sendMessage() {
-  if (isSending) return
-  const input = document.getElementById('msg-input')
-  const text = input.value.trim()
-  if (!text) return
-
-  isSending = true
-  input.value = ''
-  input.style.height = 'auto'
-  document.getElementById('send-btn').disabled = true
-
-  // Render user message immediately
-  renderMessage('user', text)
-  scrollToBottom()
-
-  // Save user message to Supabase
-  messageHistory.push({ role: 'user', content: text })
-  sb.from('messages').insert({
-    user_id: currentSession.user.id,
-    role: 'user',
-    content: text
-  })
-
-  // Show typing indicator
-  const typing = document.getElementById('typing')
-  typing.classList.add('visible')
-  scrollToBottom()
-
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${currentSession.access_token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messages: messageHistory,
-        character: currentProfile.character
-      })
-    })
-
-    if (!res.ok) throw new Error(`API error ${res.status}`)
-
-    const data = await res.json()
-    const reply = data.content ?? 'Something went wrong. Please try again.'
-
-    typing.classList.remove('visible')
-    renderMessage('assistant', reply)
-    scrollToBottom()
-
-    // Save AI response to Supabase
-    messageHistory.push({ role: 'assistant', content: reply })
-    sb.from('messages').insert({
-      user_id: currentSession.user.id,
-      role: 'assistant',
-      content: reply
-    })
-
-  } catch (err) {
-    typing.classList.remove('visible')
-    showToast('Could not reach your companion. Check your connection and try again.')
-    // Remove failed user message from history so it can be retried
-    messageHistory.pop()
-    // Re-populate input so user can retry
-    input.value = text
-  }
-
-  isSending = false
-  document.getElementById('send-btn').disabled = false
-  input.focus()
-}
-
-// ── Error toast ───────────────────────────────────────────────────────────────
-function showToast(msg) {
-  const t = document.getElementById('error-toast')
-  t.textContent = msg
-  t.style.display = 'block'
-  setTimeout(() => { t.style.display = 'none' }, 4000)
-}
-
-// ── Event listeners ───────────────────────────────────────────────────────────
-document.getElementById('send-btn').addEventListener('click', sendMessage)
-
-document.getElementById('msg-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    sendMessage()
-  }
-})
-
-// Auto-resize textarea
-document.getElementById('msg-input').addEventListener('input', function () {
-  this.style.height = 'auto'
-  this.style.height = Math.min(this.scrollHeight, 120) + 'px'
-})
-
+// ── Sign out ──────────────────────────────────────────────────────────────────
 document.getElementById('signout-btn').addEventListener('click', async () => {
   await sb.auth.signOut()
   window.location.href = 'index.html'
 })
 
-// Refresh token if it expires mid-session
 sb.auth.onAuthStateChange((event, session) => {
-  if (event === 'TOKEN_REFRESHED' && session) {
-    currentSession = session
-  }
-  if (event === 'SIGNED_OUT') {
-    window.location.href = 'index.html'
-  }
+  if (event === 'TOKEN_REFRESHED' && session) currentSession = session
+  if (event === 'SIGNED_OUT') window.location.href = 'index.html'
 })
 
+// ── Cursor ────────────────────────────────────────────────────────────────────
+const cursor = document.getElementById('cursor')
+const ring = document.getElementById('cursorRing')
+let mx=0, my=0, rx=0, ry=0
+
+document.addEventListener('mousemove', e => { mx=e.clientX; my=e.clientY; cursor.style.left=mx+'px'; cursor.style.top=my+'px' })
+;(function animRing() { rx+=(mx-rx)*0.1; ry+=(my-ry)*0.1; ring.style.left=rx+'px'; ring.style.top=ry+'px'; requestAnimationFrame(animRing) })()
+
+document.querySelectorAll('button,.usecase-chip,.int-chip').forEach(el => {
+  el.addEventListener('mouseenter', () => { cursor.style.transform='translate(-50%,-50%) scale(2.5)'; ring.style.width='50px'; ring.style.height='50px' })
+  el.addEventListener('mouseleave', () => { cursor.style.transform='translate(-50%,-50%) scale(1)'; ring.style.width='30px'; ring.style.height='30px' })
+})
+
+// ── Eye tracking (Nox only — other characters use idle animation) ─────────────
+const pupilL     = document.getElementById('pupilLeft')
+const pupilR     = document.getElementById('pupilRight')
+const highlightL = document.getElementById('highlightLeft')
+const highlightR = document.getElementById('highlightRight')
+const charSvg    = document.getElementById('charSvg')
+
+let isTyping = false
+let eyeTarget = { x: 0, y: 0 }
+let currentEye = { x: 0, y: 0 }
+const EYE_RANGE = 2.5
+
+function getCharCenter() {
+  const rect = charSvg.getBoundingClientRect()
+  return { x: rect.left + rect.width * (44/120), y: rect.top + rect.height * (57/150) }
+}
+
+function getChatCenter() {
+  const rect = document.getElementById('messages').getBoundingClientRect()
+  return { x: rect.left + rect.width * 0.5, y: rect.top + rect.height * 0.5 }
+}
+
+document.addEventListener('mousemove', e => {
+  if (isTyping || !pupilL) return
+  const center = getCharCenter()
+  const dx = e.clientX - center.x, dy = e.clientY - center.y
+  const dist = Math.sqrt(dx*dx + dy*dy)
+  const norm = dist > 0 ? { x: dx/dist, y: dy/dist } : { x:0, y:0 }
+  const factor = Math.min(dist / 400, 1)
+  eyeTarget = { x: norm.x * EYE_RANGE * factor, y: norm.y * EYE_RANGE * factor }
+})
+
+function updateEyes() {
+  if (!pupilL || !pupilR) return
+  currentEye.x += (eyeTarget.x - currentEye.x) * 0.08
+  currentEye.y += (eyeTarget.y - currentEye.y) * 0.08
+  const lx = 44 + currentEye.x, ly = 57 + currentEye.y
+  const rx2 = 76 + currentEye.x, ry2 = 57 + currentEye.y
+  pupilL.setAttribute('cx', lx); pupilL.setAttribute('cy', ly)
+  highlightL.setAttribute('cx', lx + 1.5); highlightL.setAttribute('cy', ly - 1.5)
+  pupilR.setAttribute('cx', rx2); pupilR.setAttribute('cy', ry2)
+  highlightR.setAttribute('cx', rx2 + 1.5); highlightR.setAttribute('cy', ry2 - 1.5)
+  requestAnimationFrame(updateEyes)
+}
+if (pupilL) updateEyes()
+
+// ── Character state management ────────────────────────────────────────────────
+const charFigure = document.getElementById('charFigure')
+const charState  = document.getElementById('charState')
+const charGlow   = document.getElementById('charGlow')
+const mouth      = document.getElementById('mouth')
+const browLeft   = document.getElementById('browLeft')
+const browRight  = document.getElementById('browRight')
+
+function setState(state) {
+  charFigure.className = 'char-figure'
+  charState.className  = 'char-state'
+  const c = currentProfile ? CHAR_DATA[currentProfile.character] : CHAR_DATA.nox
+
+  if (state === 'idle') {
+    charState.innerHTML = '<span class="state-icon">👁</span><span>Watching</span>'
+    if (mouth) mouth.setAttribute('d', 'M52 74 Q60 79 68 74')
+    if (browLeft) { browLeft.setAttribute('y1','45'); browLeft.setAttribute('y2','45') }
+    if (browRight) { browRight.setAttribute('y1','45'); browRight.setAttribute('y2','45') }
+    charGlow.style.opacity = '1'
+  }
+  if (state === 'thinking') {
+    charFigure.classList.add('thinking')
+    charState.classList.add('thinking-state')
+    charState.innerHTML = '<span class="state-icon">💭</span><span>Thinking...</span>'
+    if (mouth) mouth.setAttribute('d', 'M53 75 Q60 76 67 75')
+    if (browLeft) { browLeft.setAttribute('y1','44'); browLeft.setAttribute('y2','46') }
+    if (browRight) { browRight.setAttribute('y1','46'); browRight.setAttribute('y2','44') }
+    eyeTarget = { x: -1.5, y: -1.5 }
+    charGlow.style.opacity = '0.6'
+  }
+  if (state === 'talking') {
+    charFigure.classList.add('talking')
+    charState.classList.add('talking-state')
+    charState.innerHTML = '<span class="state-icon">💬</span><span>Talking</span>'
+    if (mouth) mouth.setAttribute('d', 'M50 74 Q60 82 70 74')
+    charGlow.style.opacity = '1'
+    charGlow.style.background = `radial-gradient(circle, ${c.glow.replace('0.25','0.4')} 0%, transparent 70%)`
+  }
+  if (state === 'listening') {
+    charState.innerHTML = '<span class="state-icon">👂</span><span>Listening</span>'
+    if (pupilL) {
+      const chatPos = getChatCenter(), center = getCharCenter()
+      const dx = chatPos.x - center.x, dy = chatPos.y - center.y + 100
+      const dist = Math.sqrt(dx*dx + dy*dy)
+      eyeTarget = { x: (dx/dist)*EYE_RANGE, y: (dy/dist)*EYE_RANGE }
+    }
+    charGlow.style.opacity = '0.8'
+  }
+}
+
+// ── Chat logic ────────────────────────────────────────────────────────────────
+const input    = document.getElementById('chatInput')
+const sendBtn  = document.getElementById('sendBtn')
+const messages = document.getElementById('messages')
+
+let typingTimer
+input.addEventListener('input', () => {
+  isTyping = true
+  setState('listening')
+  clearTimeout(typingTimer)
+  typingTimer = setTimeout(() => { isTyping = false; setState('idle') }, 2000)
+  input.style.height = 'auto'
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px'
+})
+
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+})
+
+function addMessage(role, text) {
+  const row = document.createElement('div')
+  row.className = `msg-row ${role === 'user' ? 'user-row' : 'ai-row'}`
+  const now = new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
+  const charInitial = currentProfile ? (CHAR_DATA[currentProfile.character]?.name[0] ?? '?') : '?'
+  const charName = currentProfile ? (CHAR_DATA[currentProfile.character]?.name ?? '') : ''
+
+  if (role === 'user') {
+    row.innerHTML = `<div><div class="msg-time" style="text-align:right">You · ${now}</div><div class="bubble user-bubble">${escHtml(text)}</div></div>`
+  } else {
+    row.innerHTML = `<div class="msg-avatar">${charInitial}</div><div><div class="msg-time">${charName} · ${now}</div><div class="bubble ai-bubble">${escHtml(text).replace(/\n/g,'<br/>')}</div></div>`
+  }
+  messages.appendChild(row)
+  messages.scrollTop = messages.scrollHeight
+}
+
+function addTypingIndicator() {
+  const row = document.createElement('div')
+  row.className = 'msg-row ai-row'; row.id = 'typingIndicator'
+  const charInitial = currentProfile ? (CHAR_DATA[currentProfile.character]?.name[0] ?? '?') : '?'
+  row.innerHTML = `<div class="msg-avatar">${charInitial}</div><div class="typing-bubble"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`
+  messages.appendChild(row)
+  messages.scrollTop = messages.scrollHeight
+}
+
+function removeTypingIndicator() {
+  document.getElementById('typingIndicator')?.remove()
+}
+
+function escHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+async function sendMessage(text) {
+  const msg = text || input.value.trim()
+  if (!msg || !currentSession) return
+
+  input.value = ''; input.style.height = 'auto'
+  sendBtn.disabled = true; isTyping = false
+
+  if (firstMessage) { document.getElementById('usecases').style.display = 'none'; firstMessage = false }
+
+  addMessage('user', msg)
+  chatHistory.push({ role: 'user', content: msg })
+
+  // Save user message to Supabase (fire-and-forget)
+  sb.from('messages').insert({ user_id: currentSession.user.id, role: 'user', content: msg })
+
+  setState('thinking')
+  addTypingIndicator()
+
+  try {
+    const res = await fetch(`${window.SUPABASE_URL}/functions/v1/chat`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${currentSession.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ messages: chatHistory.slice(-40), character: currentProfile.character })
+    })
+
+    if (!res.ok) throw new Error(`Error ${res.status}`)
+    const data = await res.json()
+    const answer = data.content || 'Something went wrong. Try again.'
+
+    removeTypingIndicator()
+    setState('talking')
+    addMessage('assistant', answer)
+    chatHistory.push({ role: 'assistant', content: answer })
+
+    // Save AI response to Supabase (fire-and-forget)
+    sb.from('messages').insert({ user_id: currentSession.user.id, role: 'assistant', content: answer })
+
+    setTimeout(() => setState('idle'), 2500)
+
+  } catch (err) {
+    removeTypingIndicator()
+    setState('idle')
+    addMessage('assistant', 'Connection issue. Check your network and try again.')
+    chatHistory.pop() // remove failed user message so it can be retried
+  }
+
+  sendBtn.disabled = false
+  input.focus()
+}
+
+function sendUsecase(text) { input.value = text; sendMessage(text) }
+
+// ── Start ─────────────────────────────────────────────────────────────────────
 init()
 </script>
 </body>
